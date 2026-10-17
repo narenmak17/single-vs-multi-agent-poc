@@ -1,0 +1,57 @@
+# Minimal monolithic Mimir — single binary, filesystem storage, no multitenancy.
+# Good enough for a local Claude Code metrics sink; not for production.
+
+multitenancy_enabled: false
+
+server:
+  http_listen_port: 9009
+  grpc_listen_port: 9095
+  log_level: warn
+
+common:
+  storage:
+    backend: filesystem
+    filesystem:
+      dir: /data
+
+blocks_storage:
+  storage_prefix: blocks
+  tsdb:
+    dir: /data/tsdb
+  bucket_store:
+    sync_dir: /data/tsdb-sync
+
+compactor:
+  data_dir: /data/compactor
+  sharding_ring:
+    kvstore:
+      store: memberlist
+
+distributor:
+  ring:
+    instance_addr: 127.0.0.1
+    kvstore:
+      store: memberlist
+
+ingester:
+  ring:
+    instance_addr: 127.0.0.1
+    kvstore:
+      store: memberlist
+    replication_factor: 1
+
+ruler_storage:
+  storage_prefix: ruler
+  backend: filesystem
+  filesystem:
+    dir: /data/ruler
+
+store_gateway:
+  sharding_ring:
+    replication_factor: 1
+
+limits:
+  ingestion_rate: 100000
+  ingestion_burst_size: 200000
+  # Claude Code can backfill slightly out-of-order samples; allow a window.
+  out_of_order_time_window: 1h
