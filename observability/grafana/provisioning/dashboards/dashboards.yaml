@@ -1,0 +1,14 @@
+# Auto-load dashboard JSON files from /etc/dashboards into a "Claude Code" folder.
+apiVersion: 1
+
+providers:
+  - name: claude-code
+    orgId: 1
+    folder: "Claude Code"
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/dashboards
+      foldersFromFilesStructure: false

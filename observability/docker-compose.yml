@@ -1,0 +1,115 @@
+name: claude-code-observability
+
+# Grafana LGTM-style stack for collecting Claude Code OpenTelemetry signals.
+#
+#   Claude Code  ──OTLP──▶  otel-collector  ──┬─▶ Mimir   (metrics)
+#   (localhost:4317/4318)                      ├─▶ Tempo   (traces)
+#                                              └─▶ Loki    (logs)
+#                                                      ▲
+#                                          Grafana ────┘  (visualisation, :3000)
+#
+# Point Claude Code at the collector with:
+#   OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317   (gRPC)
+#   OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318   (HTTP/protobuf)
+
+services:
+  # ---------------------------------------------------------------------------
+  # OTEL Collector — the single entry point Claude Code talks to.
+  # ---------------------------------------------------------------------------
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.115.1
+    container_name: otel-collector
+    restart: unless-stopped
+    command: ["--config=/etc/otel-collector/config.yaml"]
+    volumes:
+      - ./otel-collector/config.yaml:/etc/otel-collector/config.yaml:ro
+    ports:
+      - "4317:4317"   # OTLP gRPC   <- point Claude Code here
+      - "4318:4318"   # OTLP HTTP   <- ...or here
+      - "8888:8888"   # collector's own internal metrics
+    depends_on:
+      - mimir
+      - tempo
+      - loki
+    networks:
+      - observability
+
+  # ---------------------------------------------------------------------------
+  # Mimir — long-term, Prometheus-compatible metrics storage.
+  # ---------------------------------------------------------------------------
+  mimir:
+    image: grafana/mimir:2.14.2
+    container_name: mimir
+    restart: unless-stopped
+    command: ["-config.file=/etc/mimir/mimir.yaml"]
+    volumes:
+      - ./mimir/mimir.yaml:/etc/mimir/mimir.yaml:ro
+      - mimir-data:/data
+    networks:
+      - observability
+
+  # ---------------------------------------------------------------------------
+  # Tempo — distributed tracing backend.
+  # ---------------------------------------------------------------------------
+  tempo:
+    image: grafana/tempo:2.6.1
+    container_name: tempo
+    restart: unless-stopped
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    volumes:
+      - ./tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    networks:
+      - observability
+
+  # ---------------------------------------------------------------------------
+  # Loki — log aggregation.
+  # ---------------------------------------------------------------------------
+  loki:
+    image: grafana/loki:3.3.2
+    container_name: loki
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    volumes:
+      - ./loki/loki.yaml:/etc/loki/loki.yaml:ro
+      - loki-data:/loki
+    networks:
+      - observability
+
+  # ---------------------------------------------------------------------------
+  # Grafana — the UI, pre-wired to all three datasources.
+  # ---------------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: grafana
+    restart: unless-stopped
+    environment:
+      # Open the dashboard without a login prompt for local use.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_SECURITY_ADMIN_USER: "admin"
+      GF_SECURITY_ADMIN_PASSWORD: "admin"
+      GF_FEATURE_TOGGLES_ENABLE: "traceqlEditor"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/etc/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"   # Grafana UI -> http://localhost:3000
+    depends_on:
+      - mimir
+      - tempo
+      - loki
+    networks:
+      - observability
+
+networks:
+  observability:
+    driver: bridge
+
+volumes:
+  mimir-data:
+  tempo-data:
+  loki-data:
+  grafana-data:

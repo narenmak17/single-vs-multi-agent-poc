@@ -1,0 +1,8 @@
+#!/bin/sh
+# Blocks the push if any SPEC.md guardrail fails. Install with: sh hooks/install.sh
+cd "$(git rev-parse --show-toplevel)" || exit 1
+if [ -x .venv/Scripts/python.exe ]; then PY=.venv/Scripts/python.exe
+elif [ -x .venv/bin/python ]; then PY=.venv/bin/python
+else PY=python
+fi
+"$PY" scripts/validate.py || { echo "pre-push: push blocked - fix the guardrail(s) above."; exit 1; }

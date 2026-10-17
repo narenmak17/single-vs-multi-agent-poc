@@ -1,0 +1,72 @@
+# OpenTelemetry Collector — receives everything Claude Code emits over OTLP
+# and fans it out to Mimir (metrics), Tempo (traces) and Loki (logs).
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Batch signals before export for efficiency.
+  batch:
+    timeout: 5s
+    send_batch_size: 1024
+
+  # Guard against the collector eating all available memory.
+  memory_limiter:
+    check_interval: 5s
+    limit_percentage: 80
+    spike_limit_percentage: 25
+
+  # Claude Code emits Sum metrics with DELTA temporality, but Prometheus
+  # remote-write only accepts CUMULATIVE. Accumulate deltas into cumulative
+  # counters here so the series actually land in Mimir.
+  deltatocumulative:
+    max_stale: 5m
+
+exporters:
+  # Metrics -> Mimir via Prometheus remote-write.
+  prometheusremotewrite:
+    endpoint: http://mimir:9009/api/v1/push
+    # Keep metric names 1:1 with Claude Code's OTel names (no _total/unit suffix),
+    # so dashboard queries are predictable: claude_code_token_usage, etc.
+    add_metric_suffixes: false
+    # Turn OTEL resource attributes (service.name, etc.) into metric labels.
+    resource_to_telemetry_conversion:
+      enabled: true
+    tls:
+      insecure: true
+
+  # Traces -> Tempo over OTLP/gRPC.
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+
+  # Logs -> Loki's native OTLP endpoint (collector appends /v1/logs).
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp
+    tls:
+      insecure: true
+
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, deltatocumulative, batch]
+      exporters: [prometheusremotewrite]
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp/tempo]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlphttp/loki]
+
+  telemetry:
+    metrics:
+      address: 0.0.0.0:8888
