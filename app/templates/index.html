@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tasks</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --paper: #f4efe4;
+    --card: #fbf8f1;
+    --ink: #1d1b17;
+    --muted: #6f685b;
+    --rule: #d9d0bd;
+    --alarm: #c8361b;
+    --alarm-wash: #f8e1d8;
+    --done: #9a9384;
+    --focus: #1d1b17;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #17150f;
+      --card: #201d16;
+      --ink: #efe9dc;
+      --muted: #a39b8a;
+      --rule: #3a352a;
+      --alarm: #ff6a45;
+      --alarm-wash: #3a1d14;
+      --done: #6f685b;
+      --focus: #efe9dc;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font: 16px/1.5 "IBM Plex Sans", system-ui, sans-serif;
+  }
+  main { max-width: 680px; margin: 0 auto; padding: 48px 16px 80px; }
+
+  header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px;
+           border-bottom: 2px solid var(--ink); padding-bottom: 12px; }
+  h1 { font: 700 2.6rem/1 "Fraunces", Georgia, serif; letter-spacing: -0.02em; margin: 0; }
+  .tally { font: 500 0.8rem "IBM Plex Mono", monospace; color: var(--muted); text-transform: uppercase;
+           letter-spacing: 0.08em; white-space: nowrap; }
+  .tally b { color: var(--alarm); font-weight: 500; }
+
+  form { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 8px; margin: 24px 0 8px; }
+  input, button { font: inherit; color: inherit; }
+  input { background: var(--card); border: 1px solid var(--rule); border-radius: 2px; padding: 10px 12px;
+          min-width: 0; width: 100%; }
+  input:focus-visible, button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  input[type=date], input[type=time] { font-family: "IBM Plex Mono", monospace; font-size: 0.9rem; }
+  button[type=submit] { background: var(--ink); color: var(--paper); border: 0; border-radius: 2px;
+                        padding: 10px 18px; font-weight: 500; cursor: pointer; }
+  button[type=submit]:hover { opacity: 0.85; }
+  .hint { font-size: 0.8rem; color: var(--muted); margin: 0 0 32px; }
+  .error { color: var(--alarm); }
+
+  h2 { font: 500 0.75rem "IBM Plex Mono", monospace; text-transform: uppercase; letter-spacing: 0.12em;
+       color: var(--muted); margin: 32px 0 8px; }
+  h2.alarm { color: var(--alarm); }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 14px;
+       padding: 12px 4px; border-bottom: 1px solid var(--rule); animation: in 240ms ease-out both; }
+  @keyframes in { from { opacity: 0; transform: translateY(4px); } }
+  @media (prefers-reduced-motion: reduce) { li { animation: none; } }
+
+  li.reminder { background: var(--alarm-wash); border-left: 4px solid var(--alarm);
+                padding-left: 12px; border-bottom-color: transparent; margin-bottom: 4px; }
+  li.done .title { color: var(--done); text-decoration: line-through; }
+  input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--ink); cursor: pointer; margin: 0; }
+  .title { overflow-wrap: anywhere; }
+  .due { font: 0.8rem "IBM Plex Mono", monospace; color: var(--muted); white-space: nowrap; text-align: right; }
+  li.reminder .due { color: var(--alarm); font-weight: 500; }
+  .flag { display: inline-block; font: 500 0.65rem "IBM Plex Mono", monospace; letter-spacing: 0.08em;
+          text-transform: uppercase; background: var(--alarm); color: var(--card); padding: 1px 6px;
+          border-radius: 2px; margin-right: 8px; vertical-align: 2px; }
+  .empty { color: var(--muted); font-style: italic; padding: 12px 4px; }
+
+  @media (max-width: 560px) {
+    h1 { font-size: 2rem; }
+    form { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    form input[name=title], form button { grid-column: 1 / -1; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Tasks</h1>
+    <span class="tally" id="tally"></span>
+  </header>
+
+  <form id="add">
+    <input name="title" placeholder="What needs doing?" aria-label="Task title" required maxlength="200">
+    <input name="date" type="date" aria-label="Due date (optional)">
+    <input name="time" type="time" aria-label="Due time (optional)">
+    <button type="submit">Add</button>
+  </form>
+  <p class="hint" id="hint">Due date and time are optional. A date with no time means end of that day.</p>
+
+  <section id="urgent" hidden>
+    <h2 class="alarm">Due within 24 hours</h2>
+    <ul id="urgent-list"></ul>
+  </section>
+  <section>
+    <h2>Everything else</h2>
+    <ul id="rest-list"></ul>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const hint = $("hint");
+const HINT = hint.textContent;
+
+function dueLabel(dueAt) {
+  if (!dueAt) return "";
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(dueAt);
+  const due = dateOnly ? new Date(dueAt + "T23:59:59") : new Date(dueAt);
+  if (isNaN(due)) return dueAt;
+  const mins = Math.round((due - Date.now()) / 60000);
+  const abs = Math.abs(mins);
+  const span = abs < 60 ? `${abs}m` : abs < 2880 ? `${Math.round(abs / 60)}h` : `${Math.round(abs / 1440)}d`;
+  if (mins < 0) return `overdue ${span}`;
+  if (mins < 2880) return dateOnly && due.toDateString() === new Date().toDateString() ? "today" : `in ${span}`;
+  return due.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
+
+function row(task) {
+  const li = document.createElement("li");
+  li.className = (task.reminder ? "reminder " : "") + (task.done ? "done" : "");
+  const box = document.createElement("input");
+  box.type = "checkbox";
+  box.checked = task.done;
+  box.setAttribute("aria-label", `Mark "${task.title}" ${task.done ? "not done" : "done"}`);
+  box.addEventListener("change", () => setDone(task.id, box.checked));
+  const title = document.createElement("span");
+  title.className = "title";
+  if (task.reminder) {
+    const flag = document.createElement("span");
+    flag.className = "flag";
+    flag.textContent = dueLabel(task.due_at).startsWith("overdue") ? "Overdue" : "Due soon";
+    title.append(flag);
+  }
+  title.append(task.title);
+  const due = document.createElement("span");
+  due.className = "due";
+  due.textContent = dueLabel(task.due_at);
+  if (task.due_at) due.title = task.due_at;
+  li.append(box, title, due);
+  return li;
+}
+
+async function load() {
+  const tasks = await (await fetch("/api/tasks")).json();
+  const urgent = tasks.filter((t) => t.reminder);
+  const rest = tasks.filter((t) => !t.reminder).sort((a, b) => a.done - b.done);
+  $("urgent").hidden = urgent.length === 0;
+  $("urgent-list").replaceChildren(...urgent.map(row));
+  const restList = $("rest-list");
+  restList.replaceChildren(...rest.map(row));
+  if (!rest.length) {
+    const li = document.createElement("li");
+    li.className = "empty";
+    li.textContent = tasks.length ? "Nothing else." : "No tasks yet.";
+    restList.append(li);
+  }
+  const open = tasks.filter((t) => !t.done).length;
+  $("tally").innerHTML = urgent.length ? `<b>${urgent.length} due soon</b> · ${open} open` : `${open} open`;
+  document.title = urgent.length ? `(${urgent.length}) Tasks` : "Tasks";
+}
+
+async function setDone(id, done) {
+  await fetch(`/api/tasks/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ done }),
+  });
+  load();
+}
+
+$("add").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const due_at = f.date.value ? (f.time.value ? `${f.date.value}T${f.time.value}` : f.date.value) : null;
+  const res = await fetch("/api/tasks", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: f.title.value, due_at }),
+  });
+  if (!res.ok) {
+    hint.textContent = (await res.json()).error;
+    hint.classList.add("error");
+    return;
+  }
+  hint.textContent = HINT;
+  hint.classList.remove("error");
+  f.reset();
+  f.title.focus();
+  load();
+});
+
+load();
+setInterval(load, 60000); // reminders are time-driven: re-check every minute
+</script>
+</body>
+</html>
