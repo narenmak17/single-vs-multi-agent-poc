@@ -42,6 +42,7 @@ def create_task(conn: sqlite3.Connection, title, due_at=None) -> models.Task:
 
 def mark_done(conn: sqlite3.Connection, task_id: int, done: bool) -> models.Task | None:
     """Capability 2. Returns None when the task doesn't exist."""
+    print("marking", task_id, done)
     cur = conn.execute("UPDATE tasks SET done = ? WHERE id = ?", (int(done), task_id))
     if cur.rowcount == 0:
         return None
